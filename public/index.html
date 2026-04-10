@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>משחק Platformer 2D</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -15,16 +14,14 @@
             justify-content: center;
             align-items: center;
             padding: 20px;
-            color: #fff;
         }
-        #game-container {
-            max-width: 1280px;
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            background: #000;
+        canvas {
+            border: 3px solid #0096ff;
             border-radius: 10px;
             box-shadow: 0 0 30px rgba(0, 150, 255, 0.5);
-            overflow: hidden;
+            background: #000;
+            display: block;
+            max-width: 100%;
         }
         .info {
             position: fixed;
@@ -34,16 +31,17 @@
             padding: 15px;
             border-radius: 8px;
             border: 2px solid #0096ff;
+            color: #fff;
             font-size: 13px;
             z-index: 100;
         }
-        .info h3 { color: #00d4ff; margin-bottom: 8px; font-size: 14px; }
+        .info h3 { color: #00d4ff; margin-bottom: 8px; }
         .info p { margin: 4px 0; color: #aaa; }
         .info strong { color: #00ff88; }
     </style>
 </head>
 <body>
-    <div id="game-container"></div>
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
     <div class="info">
         <h3>🎮 Platformer 2D</h3>
         <p><strong>A/D</strong> - תנועה</p>
@@ -53,209 +51,171 @@
     </div>
 
     <script>
-        const config = {
-            type: Phaser.AUTO,
-            width: 1280,
-            height: 720,
-            parent: 'game-container',
-            physics: {
-                default: 'arcade',
-                arcade: {
-                    gravity: { y: 800 },
-                    debug: false
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const GRAVITY = 800, FRICTION = 0.95;
+        let score = 0, gameOver = false;
+
+        class Player {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.width = 30; this.height = 50;
+                this.velocityX = 0; this.velocityY = 0;
+                this.jumpPower = 400; this.moveSpeed = 250;
+                this.isJumping = false;
+            }
+            update(dt, platforms) {
+                this.velocityY += GRAVITY * dt;
+                this.velocityX *= FRICTION;
+                this.x += this.velocityX * dt;
+                this.y += this.velocityY * dt;
+                let onGround = false;
+                for (let p of platforms) {
+                    if (this.velocityY >= 0 && this.y + this.height >= p.y &&
+                        this.y + this.height <= p.y + 15 && this.x + this.width > p.x &&
+                        this.x < p.x + p.width) {
+                        this.y = p.y - this.height; this.velocityY = 0; onGround = true;
+                    }
                 }
-            },
-            scene: {
-                preload: preload,
-                create: create,
-                update: update
+                if ((this.keys['Space'] || this.keys['w'] || this.keys['ArrowUp']) && onGround && !this.isJumping) {
+                    this.isJumping = true; this.velocityY = -this.jumpPower;
+                }
+                if (!this.keys['Space'] && !this.keys['w'] && !this.keys['ArrowUp']) this.isJumping = false;
+                if (this.keys['a'] || this.keys['ArrowLeft']) this.velocityX = -this.moveSpeed;
+                if (this.keys['d'] || this.keys['ArrowRight']) this.velocityX = this.moveSpeed;
+                if (this.y > 1500) gameOver = true;
             }
-        };
-
-        const game = new Phaser.Game(config);
-        let player, platforms, enemies, collectibles, movingPlatforms;
-        let score = 0;
-        let keys = {};
-        let gameOver = false;
-
-        function preload() {}
-
-        function create() {
-            this.physics.world.setBounds(0, 0, 2400, 1400);
-            this.cameras.main.setBounds(0, 0, 2400, 1400);
-            this.cameras.main.setBackgroundColor('#0a0a1a');
-
-            // Create groups
-            platforms = this.physics.add.staticGroup();
-            movingPlatforms = this.physics.add.group();
-            enemies = this.physics.add.group();
-            collectibles = this.physics.add.group();
-
-            // Ground
-            let ground = platforms.create(1200, 1360, null);
-            ground.setScale(120, 2);
-            ground.body.setImmovable(true);
-            ground.setFillStyle(0x2d6a2d);
-            ground.isRectangle = true;
-
-            // Static platforms
-            const staticPlatforms = [
-                [150, 1280, 8, 1],
-                [400, 1220, 8, 1],
-                [650, 1160, 8, 1],
-                [900, 1100, 8, 1],
-                [1550, 1220, 15, 1],
-                [1950, 1280, 4, 1],
-                [2080, 1230, 4, 1],
-                [2210, 1180, 4, 1]
-            ];
-
-            staticPlatforms.forEach(([x, y, w, h]) => {
-                let p = platforms.create(x, y, null);
-                p.setScale(w, h);
-                p.body.setImmovable(true);
-                p.setFillStyle(0x3d8a3d);
-                p.isRectangle = true;
-            });
-
-            // Moving platforms
-            [[1000, 950], [1300, 850]].forEach(([x, y]) => {
-                let p = movingPlatforms.create(x, y, null);
-                p.setScale(7.5, 1);
-                p.body.setAllowGravity(false);
-                p.body.setImmovable(true);
-                p.setFillStyle(0x6464aa);
-                p.isRectangle = true;
-                p.moveStart = x;
-                p.moveDistance = 200;
-                p.moveSpeed = 150;
-                p.direction = 1;
-            });
-
-            // Player
-            player = this.physics.add.sprite(120, 1280, null);
-            player.setBounce(0.1);
-            player.isJumping = false;
-            player.jumpCharge = 0;
-            player.moveSpeed = 280;
-            player.jumpPower = 420;
-            player.maxJumpPower = 520;
-            player.setFillStyle(0x4080ff);
-            player.setScale(2, 2.6);
-            player.isRectangle = true;
-
-            // Enemies
-            [{x: 700, y: 1310}, {x: 1700, y: 1200}, {x: 1880, y: 1200}].forEach(e => {
-                let en = enemies.create(e.x, e.y, null);
-                en.setFillStyle(0xcc3333);
-                en.setScale(1.7, 1.7);
-                en.isRectangle = true;
-                en.patrolStart = e.x;
-                en.patrolDistance = 200;
-                en.moveSpeed = 120;
-                en.direction = 1;
-            });
-
-            // Collectibles
-            [{x: 230, y: 1250, v: 10}, {x: 480, y: 1190, v: 10}, {x: 730, y: 1130, v: 10},
-             {x: 1080, y: 910, v: 15}, {x: 1380, y: 810, v: 15}, {x: 1730, y: 950, v: 20}, {x: 1980, y: 1250, v: 25}
-            ].forEach(c => {
-                let item = collectibles.create(c.x, c.y, null);
-                item.body.setAllowGravity(false);
-                item.setFillStyle(0xffdd00);
-                item.setScale(1.1, 1.1);
-                item.isRectangle = true;
-                item.value = c.v;
-                item.originalY = c.y;
-                item.bobTime = Math.random() * 6;
-            });
-
-            // Colliders
-            this.physics.add.collider(player, platforms);
-            this.physics.add.collider(player, movingPlatforms);
-            this.physics.add.collider(enemies, platforms);
-            this.physics.add.overlap(player, collectibles, (p, c) => {
-                score += c.value;
-                document.getElementById('score').textContent = score;
-                c.destroy();
-            });
-            this.physics.add.overlap(player, enemies, () => {
-                player.setVelocityY(-350);
-            });
-
-            this.cameras.main.startFollow(player, true, 0.1, 0.1);
-
-            keys = this.input.keyboard.createCursorKeys();
-            keys.a = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-            keys.d = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-            keys.w = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-            keys.r = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
-            keys.space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-
-            this.scene = this;
+            draw(ctx) {
+                ctx.fillStyle = '#4080ff';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#0050aa';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+            }
         }
 
-        function update() {
-            if (gameOver) return;
-
-            if (player.y > 1480) {
-                gameOver = true;
-                alert('GAME OVER! ניקוד: ' + score);
-                location.reload();
-                return;
+        class Platform {
+            constructor(x, y, w, h = 20, color = '#3d8a3d') {
+                this.x = x; this.y = y; this.width = w; this.height = h; this.color = color;
             }
-
-            if (keys.r.isDown) {
-                location.reload();
-                return;
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
             }
-
-            player.setVelocityX(0);
-            if (keys.a.isDown || keys.left.isDown) player.setVelocityX(-player.moveSpeed);
-            if (keys.d.isDown || keys.right.isDown) player.setVelocityX(player.moveSpeed);
-
-            const onGround = player.body.touching.down || player.body.blocked.down;
-            if ((keys.space.isDown || keys.w.isDown || keys.up.isDown) && onGround && !player.isJumping) {
-                player.isJumping = true;
-                player.jumpCharge = player.jumpPower;
-            }
-            if (player.isJumping && onGround) {
-                player.setVelocityY(-player.jumpCharge);
-                player.isJumping = false;
-            }
-
-            movingPlatforms.children.entries.forEach(p => {
-                p.x += p.moveSpeed * p.direction * (1 / 60);
-                p.body.reset(p.x, p.y);
-                if (Math.abs(p.x - p.moveStart) > p.moveDistance) p.direction *= -1;
-            });
-
-            enemies.children.entries.forEach(e => {
-                e.setVelocityX(e.moveSpeed * e.direction);
-                if (Math.abs(e.x - e.patrolStart) > e.patrolDistance) e.direction *= -1;
-            });
-
-            collectibles.children.entries.forEach(c => {
-                c.bobTime += 1 / 60;
-                c.y = c.originalY + Math.sin(c.bobTime * 3) * 6;
-            });
         }
 
-        // Override default rectangle rendering
-        Phaser.GameObjects.Rectangle.prototype.render = function(renderer) {
-            if (this.isRectangle) {
-                const ctx = renderer.gameContext;
-                ctx.fillStyle = '#' + this.fillColor.toString(16).padStart(6, '0');
-                ctx.fillRect(
-                    this.getTopLeft().x,
-                    this.getTopLeft().y,
-                    this.width,
-                    this.height
-                );
-            } else {
-                Phaser.GameObjects.Rectangle.prototype.constructor.prototype.render.call(this, renderer);
+        class Enemy {
+            constructor(x, y, distance = 150, speed = 100) {
+                this.x = x; this.y = y; this.width = 25; this.height = 25;
+                this.startX = x; this.distance = distance; this.speed = speed;
+                this.direction = 1; this.velocityY = 0;
             }
-        };
+            update(dt, platforms) {
+                this.velocityY += GRAVITY * dt;
+                this.x += this.speed * this.direction * dt;
+                this.y += this.velocityY * dt;
+                for (let p of platforms) {
+                    if (this.velocityY >= 0 && this.y + this.height >= p.y &&
+                        this.y + this.height <= p.y + 15 && this.x + this.width > p.x &&
+                        this.x < p.x + p.width) {
+                        this.y = p.y - this.height; this.velocityY = 0;
+                    }
+                }
+                if (Math.abs(this.x - this.startX) > this.distance) this.direction *= -1;
+            }
+            draw(ctx) {
+                ctx.fillStyle = '#cc3333';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        class Collectible {
+            constructor(x, y, value = 10) {
+                this.x = x; this.y = y; this.originalY = y;
+                this.width = 15; this.height = 15; this.value = value;
+                this.time = 0; this.collected = false;
+            }
+            update(dt, player) {
+                this.time += dt;
+                this.y = this.originalY + Math.sin(this.time * 3) * 5;
+                if (!this.collected && player.x < this.x + this.width &&
+                    player.x + player.width > this.x && player.y < this.y + this.height &&
+                    player.y + player.height > this.y) {
+                    this.collected = true;
+                    score += this.value;
+                    document.getElementById('score').textContent = score;
+                }
+            }
+            draw(ctx) {
+                if (!this.collected) {
+                    ctx.fillStyle = '#ffdd00';
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                    ctx.strokeStyle = '#ff9900'; ctx.lineWidth = 2;
+                    ctx.strokeRect(this.x, this.y, this.width, this.height);
+                }
+            }
+        }
+
+        const platforms = [new Platform(0, 1360, 2400, 40, '#2d6a2d')];
+        for (let i = 0; i < 8; i++) {
+            platforms.push(new Platform(150 + i * 250, 1280 - i * 60, 120, 20));
+        }
+        platforms.push(new Platform(1550, 1220, 200, 20));
+
+        const player = new Player(100, 1280);
+        player.keys = {};
+        const enemies = [new Enemy(700, 1310, 200, 120), new Enemy(1700, 1200, 200, 120), new Enemy(1880, 1200, 200, 120)];
+        const collectibles = [new Collectible(230, 1250, 10), new Collectible(480, 1190, 10), new Collectible(730, 1130, 10),
+            new Collectible(1080, 910, 15), new Collectible(1380, 810, 15), new Collectible(1730, 950, 20), new Collectible(1980, 1250, 25)];
+        let camera = { x: 0, y: 0 };
+
+        window.addEventListener('keydown', (e) => { player.keys[e.key] = true; if (e.key.toLowerCase() === 'r') location.reload(); });
+        window.addEventListener('keyup', (e) => { player.keys[e.key] = false; });
+
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            const dt = Math.min((currentTime - lastTime) / 1000, 0.016);
+            lastTime = currentTime;
+            if (!gameOver) {
+                player.update(dt, platforms);
+                enemies.forEach(e => e.update(dt, platforms));
+                collectibles.forEach(c => c.update(dt, player));
+                enemies.forEach(e => {
+                    if (player.x < e.x + e.width && player.x + player.width > e.x &&
+                        player.y < e.y + e.height && player.y + player.height > e.y) {
+                        player.velocityY = -350;
+                    }
+                });
+                camera.x = Math.max(0, Math.min(player.x - 300, 2400 - 1280));
+                camera.y = Math.max(0, Math.min(player.y - 200, 1400 - 720));
+            }
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+            platforms.forEach(p => p.draw(ctx));
+            enemies.forEach(e => e.draw(ctx));
+            collectibles.forEach(c => c.draw(ctx));
+            player.draw(ctx);
+            ctx.restore();
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ff0000';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+                ctx.fillStyle = '#fff';
+                ctx.font = '24px Arial';
+                ctx.fillText('ניקוד: ' + score, canvas.width / 2, canvas.height / 2 + 50);
+            }
+            requestAnimationFrame(gameLoop);
+        }
+        requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>
