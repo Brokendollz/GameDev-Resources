@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>משחק Platformer 2D</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        #game-container {
+            max-width: 1280px;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 150, 255, 0.5);
+            overflow: hidden;
+        }
+
+        .info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #0096ff;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        .info h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+
+        .info p {
+            margin: 5px 0;
+            color: #aaa;
+        }
+
+        .info strong {
+            color: #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="info">
+        <h3>🎮 Platformer 2D</h3>
+        <p><strong>A</strong>/<strong>D</strong> - תנועה</p>
+        <p><strong>Space</strong> - קפיצה</p>
+        <p><strong>R</strong> - ריסט</p>
+        <p>ניקוד: <span id="score">0</span></p>
+    </div>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 1280,
+            height: 720,
+            parent: 'game-container',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 800 },
+                    debug: false
+                }
+            },
+            scene: {
+                create: create,
+                update: update,
+                preload: preload
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        let player, platforms, enemies, collectibles, movingPlatforms;
+        let score = 0;
+        let keys = {};
+
+        function preload() {}
+
+        function create() {
+            this.physics.world.setBounds(0, 0, 2400, 1400);
+            this.cameras.main.setBounds(0, 0, 2400, 1400);
+
+            // Create groups
+            platforms = this.physics.add.staticGroup();
+            movingPlatforms = this.physics.add.group();
+            enemies = this.physics.add.group();
+            collectibles = this.physics.add.group();
+
+            // Ground
+            let ground = platforms.create(1200, 1350, null);
+            ground.setScale(120, 5);
+            ground.body.setImmovable(true);
+            drawRect(this, ground, '#64C864', 120, 5);
+
+            // Additional platforms
+            const staticPlatforms = [
+                { x: 200, y: 1300, w: 8, h: 1 },
+                { x: 450, y: 1250, w: 8, h: 1 },
+                { x: 700, y: 1200, w: 8, h: 1 },
+                { x: 950, y: 1150, w: 8, h: 1 },
+                { x: 1600, y: 1250, w: 15, h: 1 },
+                { x: 2000, y: 1300, w: 4, h: 1 },
+                { x: 2100, y: 1250, w: 4, h: 1 },
+                { x: 2200, y: 1200, w: 4, h: 1 }
+            ];
+
+            staticPlatforms.forEach(p => {
+                let plat = platforms.create(p.x, p.y, null);
+                plat.setScale(p.w, p.h);
+                plat.body.setImmovable(true);
+                drawRect(this, plat, '#64C864', p.w, p.h);
+            });
+
+            // Moving platforms
+            const movingData = [
+                { x: 1000, y: 950, w: 8 },
+                { x: 1300, y: 850, w: 8 }
+            ];
+
+            movingData.forEach(m => {
+                let plat = movingPlatforms.create(m.x, m.y, null);
+                plat.setScale(m.w, 1);
+                plat.setBounce(0, 0);
+                plat.body.setAllowGravity(false);
+                plat.moveStart = m.x;
+                plat.moveDistance = 200;
+                plat.moveSpeed = 150;
+                plat.direction = 1;
+                drawRect(this, plat, '#9696C8', m.w, 1);
+            });
+
+            // Player
+            player = this.physics.add.sprite(100, 1000, null);
+            player.setBounce(0.2);
+            player.body.setDrag(0.95);
+            player.isJumping = false;
+            player.jumpCharge = 0;
+            player.moveSpeed = 300;
+            player.jumpPower = 400;
+            player.maxJumpPower = 500;
+            drawRect(this, player, '#6496FF', 2, 3);
+
+            // Enemies
+            const enemyData = [
+                { x: 700, y: 1250 },
+                { x: 1700, y: 1000 },
+                { x: 1900, y: 1000 }
+            ];
+
+            enemyData.forEach(e => {
+                let enemy = enemies.create(e.x, e.y, null);
+                enemy.setScale(0.75, 0.75);
+                enemy.body.setDrag(0.9);
+                enemy.patrolStart = e.x;
+                enemy.patrolDistance = 200;
+                enemy.moveSpeed = 120;
+                enemy.direction = 1;
+                drawRect(this, enemy, '#FF6464', 1.5, 1.5);
+            });
+
+            // Collectibles
+            const collectData = [
+                { x: 250, y: 1270, v: 10 },
+                { x: 500, y: 1220, v: 10 },
+                { x: 750, y: 1170, v: 10 },
+                { x: 1100, y: 920, v: 15 },
+                { x: 1400, y: 820, v: 15 },
+                { x: 1750, y: 970, v: 20 },
+                { x: 2000, y: 1250, v: 25 }
+            ];
+
+            collectData.forEach(c => {
+                let item = collectibles.create(c.x, c.y, null);
+                item.body.setAllowGravity(false);
+                item.value = c.v;
+                item.originalY = c.y;
+                item.bobTime = 0;
+                drawRect(this, item, '#FFFF64', 1, 1);
+            });
+
+            // Collisions
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(player, movingPlatforms);
+            this.physics.add.collider(enemies, platforms);
+            this.physics.add.collider(enemies, movingPlatforms);
+            this.physics.add.overlap(player, collectibles, (p, c) => {
+                score += c.value;
+                document.getElementById('score').textContent = score;
+                c.destroy();
+            });
+            this.physics.add.overlap(player, enemies, (p, e) => {
+                player.setVelocityY(-300);
+                player.y -= 10;
+            });
+
+            // Camera follow
+            this.cameras.main.startFollow(player);
+
+            // Input
+            keys = this.input.keyboard.createCursorKeys();
+            keys.a = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+            keys.d = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+            keys.w = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+            keys.r = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+            keys.space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+            this.gameInstance = this;
+        }
+
+        function update() {
+            if (player.y > 1500) {
+                alert('GAME OVER! ניקוד: ' + score);
+                location.reload();
+            }
+
+            player.setVelocityX(0);
+
+            if (keys.a.isDown || keys.left.isDown) {
+                player.setVelocityX(-player.moveSpeed);
+            }
+            if (keys.d.isDown || keys.right.isDown) {
+                player.setVelocityX(player.moveSpeed);
+            }
+
+            if ((keys.space.isDown || keys.w.isDown || keys.up.isDown) && !player.isJumping) {
+                if (player.body.touching.down) {
+                    player.isJumping = true;
+                    player.jumpCharge = 0;
+                }
+            }
+
+            if (player.isJumping) {
+                if (player.body.touching.down) {
+                    player.jumpCharge += player.jumpPower * 3 * 0.016;
+                    player.jumpCharge = Math.min(player.jumpCharge, player.maxJumpPower);
+                } else {
+                    player.setVelocityY(-player.jumpCharge);
+                    player.isJumping = false;
+                }
+            }
+
+            if (keys.r.isDown) {
+                location.reload();
+            }
+
+            // Moving platforms
+            movingPlatforms.children.entries.forEach(p => {
+                p.x += p.moveSpeed * p.direction * 0.016;
+                if (p.x < p.moveStart - p.moveDistance || p.x > p.moveStart + p.moveDistance) {
+                    p.direction *= -1;
+                }
+            });
+
+            // Enemies
+            enemies.children.entries.forEach(e => {
+                e.setVelocityX(e.moveSpeed * e.direction);
+                if (e.x < e.patrolStart - e.patrolDistance || e.x > e.patrolStart + e.patrolDistance) {
+                    e.direction *= -1;
+                }
+            });
+
+            // Collectibles
+            collectibles.children.entries.forEach(c => {
+                c.bobTime += 0.016;
+                c.y = c.originalY + Math.sin(c.bobTime * 3) * 5;
+            });
+        }
+
+        function drawRect(scene, sprite, color, w, h) {
+            const g = scene.make.graphics({ x: 0, y: 0, add: false });
+            g.fillStyle(parseInt(color.replace('#', '0x')), 1);
+            g.fillRect(0, 0, 40, 20);
+            g.generateTexture('rect_' + Math.random(), 40, 20);
+            g.destroy();
+            sprite.setTexture('rect_' + Math.random());
+        }
+    </script>
+</body>
+</html>
