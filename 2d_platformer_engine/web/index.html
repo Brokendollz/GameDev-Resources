@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מנוע Platformer 2D - גרסת ווב</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="info-panel">
+        <div class="info-header">
+            <h1>🎮 משחק Platformer 2D</h1>
+        </div>
+        <div class="controls">
+            <h3>בקרים:</h3>
+            <ul>
+                <li><strong>A / ←</strong> - תנועה שמאלה</li>
+                <li><strong>D / →</strong> - תנועה ימינה</li>
+                <li><strong>Space / W / ↑</strong> - קפיצה</li>
+                <li><strong>R</strong> - ריסט המשחק</li>
+            </ul>
+        </div>
+        <div class="stats">
+            <h3>סטטיסטיקה:</h3>
+            <p>ניקוד: <span id="score">0</span></p>
+            <p>FPS: <span id="fps">60</span></p>
+            <p>גובה: <span id="height">0</span>px</p>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
