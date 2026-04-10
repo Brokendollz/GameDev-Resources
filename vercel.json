@@ -1,16 +1,5 @@
 {
   "name": "platformer-2d-game",
   "version": 2,
-  "builds": [
-    {
-      "src": "2d_platformer_engine/web/**/*",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "2d_platformer_engine/web/$1"
-    }
-  ]
+  "public": true
 }
