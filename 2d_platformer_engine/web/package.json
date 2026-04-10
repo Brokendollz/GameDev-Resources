@@ -1,0 +1,12 @@
+{
+  "name": "platformer-2d-game",
+  "version": "1.0.0",
+  "description": "2D Platformer Game - Web Version",
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "start": "python3 -m http.server 8000"
+  },
+  "keywords": ["platformer", "game", "phaser"],
+  "author": "",
+  "license": "MIT"
+}
